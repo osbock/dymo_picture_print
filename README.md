@@ -29,7 +29,40 @@ source venv/bin/activate  # On macOS/Linux
 pip install -r requirements.txt
 ```
 
-## Usage
+4. **(macOS with Homebrew Python only)** Install tkinter for GUI support:
+```bash
+brew install python-tk@3.13
+```
+   > Note: If you're using system Python or Python from python.org, tkinter is already included.
+
+## GUI Usage (Recommended)
+
+For an easier, more visual experience, use the GUI version:
+
+```bash
+python dymo_print_gui.py
+```
+
+### GUI Features
+
+- **Live Preview**: See how your image will look before printing with real-time updates
+- **Interactive Controls**: Adjust brightness and contrast with sliders
+- **Easy Selection**: Dropdown menus for dithering method, label type, and printer
+- **Visual Feedback**: Display shows exact label dimensions and processing status
+
+### Using the GUI
+
+1. Click **"Open Image"** to select your photo
+2. Adjust settings as needed:
+   - Drag the **Brightness** slider (0.5-2.0)
+   - Drag the **Contrast** slider (0.5-2.0)
+   - Select a **Dithering Method** from the dropdown
+   - Choose your **Label Type**
+   - Select your **Printer**
+3. Watch the preview update automatically
+4. Click **"Print to Dymo"** when satisfied
+
+## Command-Line Usage
 
 ### Basic Usage
 ```bash
