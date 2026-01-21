@@ -2,8 +2,73 @@ import subprocess
 import os
 import sys
 import argparse
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import hitherdither
+
+def ascii_dither(img, target_w, target_h):
+    """
+    Convert grayscale image to ASCII art dithering.
+    Uses characters with different densities to represent brightness levels.
+    Font size optimized for 300 DPI printing.
+    """
+    # ASCII characters ordered from light to dark by visual density
+    # Using a 70-level character set for much smoother gradation
+    ascii_chars = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczMW&8%B@$"
+    
+    # Font size: 2pt at 300 DPI = 2 * 300/72 = ~8 pixels tall
+    # Smaller font = more characters = higher resolution
+    font_size = 2  # points
+    dpi = 300
+    font_height_px = int(font_size * dpi / 72)  # ~8 pixels
+    
+    # Try to use a monospace font for consistent character width
+    # Fall back to default if not available
+    try:
+        # Try common monospace fonts on macOS
+        font = ImageFont.truetype("/System/Library/Fonts/Courier.dfont", font_height_px)
+    except:
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Monaco.dfont", font_height_px)
+        except:
+            # Fall back to default font
+            font = ImageFont.load_default()
+    
+    # Calculate character dimensions using getbbox
+    # Test with a dense character to get max dimensions
+    bbox = font.getbbox("@")
+    char_width = bbox[2] - bbox[0]
+    char_height = bbox[3] - bbox[1]
+    
+    # Calculate how many characters fit in target dimensions
+    cols = target_w // char_width
+    rows = target_h // char_height
+    
+    # Resize image to match character grid
+    img_resized = img.resize((cols, rows), Image.Resampling.LANCZOS)
+    
+    # Create output image
+    output = Image.new('L', (target_w, target_h), 255)  # White background
+    draw = ImageDraw.Draw(output)
+    
+    # Convert each pixel to ASCII character
+    pixels = img_resized.load()
+    for row in range(rows):
+        for col in range(cols):
+            # Get brightness (0=black, 255=white)
+            brightness = pixels[col, row]
+            
+            # Map brightness to ASCII character
+            # Invert because we want dark chars for dark areas
+            char_index = int((255 - brightness) / 255 * (len(ascii_chars) - 1))
+            char_index = min(char_index, len(ascii_chars) - 1)
+            char = ascii_chars[char_index]
+            
+            # Draw character
+            x = col * char_width
+            y = row * char_height
+            draw.text((x, y), char, fill=0, font=font)  # Black text
+    
+    return output
 
 # Label Specifications
 # ID is the CUPS PageSize name.
@@ -159,6 +224,10 @@ def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_a
         return hitherdither.diffusion.error_diffusion_dithering(
             img_rgb, palette, method=dither_alg, order=8
         ).convert('1')
+    elif dither_alg == 'ascii':
+        # ASCII art dithering - renders text characters based on brightness
+        ascii_img = ascii_dither(img, target_w, target_h)
+        return ascii_img.convert('1')
     else:
         # Fallback to simple threshold if unknown or 'none'
         return img.convert('1', dither=Image.NONE)
@@ -199,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument("--printer", help="Name of the printer to use")
     parser.add_argument("--brightness", type=float, default=1.2, help="Brightness factor (default: 1.2)")
     parser.add_argument("--contrast", type=float, default=1.0, help="Contrast factor (default: 1.0)")
-    parser.add_argument("--dither", choices=['floyd', 'bayer', 'yliluoma', 'cluster', 'none', 'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a'], default='floyd', help="Dithering algorithm (default: floyd)")
+    parser.add_argument("--dither", choices=['floyd', 'bayer', 'yliluoma', 'cluster', 'none', 'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii'], default='floyd', help="Dithering algorithm (default: floyd)")
     parser.add_argument("--label", default='30256', help="Dymo Label Code (default: 30256). Choices: " + ", ".join(LABEL_SPECS.keys()))
     
     args = parser.parse_args()

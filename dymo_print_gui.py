@@ -98,7 +98,7 @@ class DymoPrintGUI:
         dither_options = [
             'floyd', 'bayer', 'yliluoma', 'cluster', 'none',
             'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 
-            'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a'
+            'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii'
         ]
         self.dither_combo = ttk.Combobox(
             controls_frame, 
