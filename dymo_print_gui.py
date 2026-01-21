@@ -396,7 +396,7 @@ class DymoPrintGUI:
             messagebox.showerror("Print Error", f"Failed to print:\n{error}")
             self.status_label.config(text="Print failed")
         else:
-            messagebox.showinfo("Success", "Print job sent successfully!")
+            #messagebox.showinfo("Success", "Print job sent successfully!")
             self.status_label.config(text="Print job sent")
 
 

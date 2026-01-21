@@ -131,9 +131,8 @@ def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_a
 
     # --- Lightening
 
-    brightness_factor=1.2
     enhancer = ImageEnhance.Brightness(img)
-    img= enhancer.enhance(brightness_factor)
+    img= enhancer.enhance(brightness)
     
     # High-Contrast Pre-processing
     # This helps eliminate 'gray noise' that causes banding in thermal prints
