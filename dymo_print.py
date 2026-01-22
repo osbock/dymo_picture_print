@@ -4,6 +4,8 @@ import sys
 import argparse
 from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 import hitherdither
+import numpy as np
+
 
 def ascii_dither(img, target_w, target_h):
     """
@@ -70,6 +72,80 @@ def ascii_dither(img, target_w, target_h):
     
     return output
 
+def get_hilbert_curve(width, height):
+    """
+    Generate Hilbert curve coordinates (x, y) for a rectangle.
+    Since Hilbert curves are for powers of 2, we use a larger power of 2
+    and filter out coordinates outside the rectangle.
+    """
+    size = 1
+    while size < width or size < height:
+        size *= 2
+    
+    def rot(n, x, y, rx, ry):
+        if ry == 0:
+            if rx == 1:
+                x = n - 1 - x
+                y = n - 1 - y
+            return y, x
+        return x, y
+
+    def d2xy(n, d):
+        t = d
+        x = y = 0
+        s = 1
+        while s < n:
+            rx = 1 & (t // 2)
+            ry = 1 & (t ^ rx)
+            x, y = rot(s, x, y, rx, ry)
+            x += s * rx
+            y += s * ry
+            t //= 4
+            s *= 2
+        return x, y
+
+    for d in range(size * size):
+        x, y = d2xy(size, d)
+        if x < width and y < height:
+            yield x, y
+
+def riemersma_dither(img, history_depth=16, ratio=0.1):
+    """
+    Implement Riemersma Dithering using a Hilbert curve.
+    history_depth: number of previous errors to keep
+    ratio: exponential decay ratio for error weighting
+    """
+    # Convert to float and extract pixels
+    img_data = np.array(img, dtype=float)
+    h, w = img_data.shape
+    
+    # Pre-calculate weights
+    weights = np.zeros(history_depth)
+    for i in range(history_depth):
+        weights[i] = ratio ** (i / (history_depth - 1))
+    weights /= np.sum(weights)  # Normalize
+    
+    # Error queue
+    error_queue = np.zeros(history_depth)
+    
+    # Process along Hilbert curve
+    output = np.zeros_like(img_data, dtype=np.uint8)
+    for x, y in get_hilbert_curve(w, h):
+        # Calculate expected value with weighted error history
+        total_error = np.sum(error_queue * weights)
+        old_pixel = img_data[y, x] + total_error
+        
+        # Quantize
+        new_pixel = 255 if old_pixel > 127.5 else 0
+        output[y, x] = new_pixel
+        
+        # Update error history
+        error = old_pixel - new_pixel
+        error_queue = np.roll(error_queue, 1)
+        error_queue[0] = error
+        
+    return Image.fromarray(output, mode='L')
+
 # Label Specifications
 # ID is the CUPS PageSize name.
 # Dimensions are in pixels at 300 DPI.
@@ -123,7 +199,7 @@ def list_printers():
         print("Error: 'lpstat' command not found. Are you on macOS?")
         return []
 
-def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_alg='floyd'):
+def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_alg='floyd', riemersma_history=16, riemersma_ratio=0.1):
     """
     Prepare image for a specific Dymo label.
     """
@@ -227,17 +303,20 @@ def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_a
         # ASCII art dithering - renders text characters based on brightness
         ascii_img = ascii_dither(img, target_w, target_h)
         return ascii_img.convert('1')
+    elif dither_alg == 'riemersma':
+        # Riemersma dithering - high quality Hilbert curve error diffusion
+        return riemersma_dither(img, history_depth=riemersma_history, ratio=riemersma_ratio).convert('1')
     else:
         # Fallback to simple threshold if unknown or 'none'
         return img.convert('1', dither=Image.NONE)
 
-def print_to_dymo_raw(image_path, printer_name, label_code='30256', brightness=1.2, contrast=1.0, dither_alg='floyd'):
+def print_to_dymo_raw(image_path, printer_name, label_code='30256', brightness=1.2, contrast=1.0, dither_alg='floyd', riemersma_history=16, riemersma_ratio=0.1):
     if label_code not in LABEL_SPECS:
         print(f"Error: Unknown label code '{label_code}'. Available: {list(LABEL_SPECS.keys())}")
         return
 
     spec = LABEL_SPECS[label_code]
-    final_image = prepare_image(image_path, spec, brightness, contrast, dither_alg)
+    final_image = prepare_image(image_path, spec, brightness, contrast, dither_alg, riemersma_history, riemersma_ratio)
     temp_file = "dymo_final.png"
     final_image.save(temp_file)
 
@@ -267,8 +346,10 @@ if __name__ == "__main__":
     parser.add_argument("--printer", help="Name of the printer to use")
     parser.add_argument("--brightness", type=float, default=1.2, help="Brightness factor (default: 1.2)")
     parser.add_argument("--contrast", type=float, default=1.0, help="Contrast factor (default: 1.0)")
-    parser.add_argument("--dither", choices=['floyd', 'bayer', 'yliluoma', 'cluster', 'none', 'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii'], default='floyd', help="Dithering algorithm (default: floyd)")
+    parser.add_argument("--dither", choices=['floyd', 'bayer', 'yliluoma', 'cluster', 'none', 'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii', 'riemersma'], default='floyd', help="Dithering algorithm (default: floyd)")
     parser.add_argument("--label", default='30256', help="Dymo Label Code (default: 30256). Choices: " + ", ".join(LABEL_SPECS.keys()))
+    parser.add_argument("--riemersma-history", type=int, default=16, help="Riemersma history depth (default: 16)")
+    parser.add_argument("--riemersma-ratio", type=float, default=0.1, help="Riemersma error decay ratio (default: 0.1)")
     
     args = parser.parse_args()
 
@@ -301,6 +382,6 @@ if __name__ == "__main__":
 
     # --- STEP 3: Print ---
     if os.path.exists(target_image):
-        print_to_dymo_raw(target_image, target_printer, args.label, args.brightness, args.contrast, args.dither)
+        print_to_dymo_raw(target_image, target_printer, args.label, args.brightness, args.contrast, args.dither, args.riemersma_history, args.riemersma_ratio)
     else:
         print("File not found.")

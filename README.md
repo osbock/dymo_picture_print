@@ -5,8 +5,9 @@ Python script to dither and print photos on a Dymo LabelWriter. Supports multipl
 ## Features
 
 - **Multiple Label Sizes**: Support for 6 common Dymo label types (30256, 30334, 30332, 30330, 30252)
-- **Advanced Dithering Algorithms**: 11+ dithering options including Floyd-Steinberg, Bayer, Yliluoma, and more
+- **Advanced Dithering Algorithms**: 14+ dithering options including Floyd-Steinberg, Riemersma, Bayer, and more
 - **Image Enhancement**: Adjustable brightness and contrast for optimal thermal printing
+- **Interactive Fine-Tuning**: Adjust Riemersma parameters directly in the GUI or via CLI
 - **Auto-Printer Detection**: Automatically detects Dymo printers on macOS
 - **Smart Image Fitting**: Automatically fits images to label dimensions while maintaining aspect ratio
 
@@ -48,6 +49,7 @@ python dymo_print_gui.py
 - **Live Preview**: See how your image will look before printing with real-time updates
 - **Interactive Controls**: Adjust brightness and contrast with sliders
 - **Easy Selection**: Dropdown menus for dithering method, label type, and printer
+- **Advanced Controls**: Dynamic sliders for Riemersma dithering (History Depth and Ratio)
 - **Visual Feedback**: Display shows exact label dimensions and processing status
 
 ### Using the GUI
@@ -84,6 +86,8 @@ python dymo_print.py image.jpg --label 30256 --dither floyd-steinberg --brightne
 | `--brightness` | Brightness factor (0.5-2.0 recommended) | `1.2` |
 | `--contrast` | Contrast factor (0.5-2.0 recommended) | `1.0` |
 | `--dither` | Dithering algorithm (see below) | `floyd` |
+| `--riemersma-history` | Riemersma history depth (2-32) | `16` |
+| `--riemersma-ratio` | Riemersma error decay ratio (0.1-0.9) | `0.1` |
 
 ## Supported Label Types
 
@@ -113,6 +117,7 @@ The script supports multiple dithering algorithms from the `hitherdither` librar
 - `sierra3` - Sierra-3 dithering
 - `sierra2` - Sierra-2 dithering
 - `sierra-2-4a` - Sierra Lite dithering
+- `riemersma` - Hilbert curve error diffusion (high quality, reduced banding)
 
 ### Other
 - `none` - Simple threshold (no dithering)
@@ -134,14 +139,20 @@ python dymo_print.py logo.png --label 30334 --dither bayer --brightness 1.4
 python dymo_print.py portrait.jpg --contrast 1.2 --dither floyd-steinberg
 ```
 
+### Print with Riemersma dithering for smoothest gradients:
+```bash
+python dymo_print.py photo.jpg --dither riemersma --riemersma-history 16 --riemersma-ratio 0.1
+```
+
 ## Tips for Best Results
 
 1. **Brightness**: Thermal printers tend to print darker. Try `--brightness 1.2` to `1.5` for better results.
 2. **Contrast**: Increase contrast (`--contrast 1.1` to `1.3`) to reduce gray noise and improve definition.
 3. **Dithering**: Experiment with different algorithms:
    - Use `floyd-steinberg` or `atkinson` for photos
+   - Use `riemersma` for the highest quality gradients and reduced banding (recommended for 450/550 models)
    - Use `bayer` for textured, artistic looks
-   - Use `yliluoma` for highest quality (slower)
+   - Use `yliluoma` for highest quality ordered dithering
 4. **Image Preparation**: Pre-crop images to match label aspect ratio for best composition.
 
 ## Requirements

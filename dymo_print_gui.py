@@ -98,7 +98,7 @@ class DymoPrintGUI:
         dither_options = [
             'floyd', 'bayer', 'yliluoma', 'cluster', 'none',
             'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 
-            'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii'
+            'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii', 'riemersma'
         ]
         self.dither_combo = ttk.Combobox(
             controls_frame, 
@@ -109,9 +109,46 @@ class DymoPrintGUI:
         )
         self.dither_combo.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         self.dither_combo.bind('<<ComboboxSelected>>', lambda e: self.on_dither_change())
-        
+
+        # Riemersma specific controls
+        self.riemersma_frame = ttk.Frame(controls_frame)
+        self.riemersma_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        # History depth slider
+        ttk.Label(self.riemersma_frame, text="History Depth:").grid(row=0, column=0, sticky=tk.W, pady=(5, 0))
+        self.history_depth_var = tk.IntVar(value=16)
+        self.history_depth_slider = tk.Scale(
+            self.riemersma_frame, from_=2, to=32,
+            variable=self.history_depth_var,
+            orient=tk.HORIZONTAL,
+            resolution=1,
+            showvalue=False
+        )
+        self.history_depth_slider.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.history_depth_label = ttk.Label(self.riemersma_frame, text="16")
+        self.history_depth_label.grid(row=0, column=1, sticky=tk.E, pady=(5, 0))
+        self.history_depth_var.trace_add('write', lambda *args: self.history_depth_label.config(text=str(self.history_depth_var.get())))
+
+        # Ratio slider
+        ttk.Label(self.riemersma_frame, text="Ratio:").grid(row=2, column=0, sticky=tk.W, pady=(5, 0))
+        self.ratio_var = tk.DoubleVar(value=0.1)
+        self.ratio_slider = tk.Scale(
+            self.riemersma_frame, from_=0.1, to=0.9,
+            variable=self.ratio_var,
+            orient=tk.HORIZONTAL,
+            resolution=0.1,
+            showvalue=False
+        )
+        self.ratio_slider.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.ratio_label = ttk.Label(self.riemersma_frame, text="0.10")
+        self.ratio_label.grid(row=2, column=1, sticky=tk.E, pady=(5, 0))
+        self.ratio_var.trace_add('write', lambda *args: self.ratio_label.config(text=f"{self.ratio_var.get():.2f}"))
+
+        # Initialize visibility
+        self.toggle_riemersma_controls()
+
         # Label type dropdown
-        ttk.Label(controls_frame, text="Label Type:").grid(row=7, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
+        ttk.Label(controls_frame, text="Label Type:").grid(row=8, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
         self.label_var = tk.StringVar(value="30256")
         label_options = [f"{code} - {spec['name']}" for code, spec in LABEL_SPECS.items()]
         self.label_combo = ttk.Combobox(
@@ -121,7 +158,7 @@ class DymoPrintGUI:
             state='readonly',
             width=25
         )
-        self.label_combo.grid(row=8, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.label_combo.grid(row=9, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         self.label_combo.current(0)
         self.label_combo.bind('<<ComboboxSelected>>', lambda e: self.update_label_info())
         
@@ -132,10 +169,10 @@ class DymoPrintGUI:
             command=self.update_preview,
             state=tk.DISABLED
         )
-        self.refresh_btn.grid(row=9, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.refresh_btn.grid(row=10, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # Printer selection dropdown
-        ttk.Label(controls_frame, text="Printer:").grid(row=10, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
+        ttk.Label(controls_frame, text="Printer:").grid(row=11, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
         self.printer_var = tk.StringVar()
         self.printer_combo = ttk.Combobox(
             controls_frame, 
@@ -143,11 +180,11 @@ class DymoPrintGUI:
             state='readonly',
             width=25
         )
-        self.printer_combo.grid(row=11, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.printer_combo.grid(row=12, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # Label info display
         self.info_frame = ttk.LabelFrame(controls_frame, text="Label Information", padding="5")
-        self.info_frame.grid(row=12, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.info_frame.grid(row=13, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         self.info_label = ttk.Label(self.info_frame, text="", justify=tk.LEFT)
         self.info_label.pack()
         self.update_label_info()
@@ -159,7 +196,7 @@ class DymoPrintGUI:
             command=self.print_image,
             state=tk.DISABLED
         )
-        self.print_btn.grid(row=13, column=0, columnspan=2, sticky=(tk.W, tk.E))
+        self.print_btn.grid(row=14, column=0, columnspan=2, sticky=(tk.W, tk.E))
         
         # Right panel - Preview
         preview_frame = ttk.LabelFrame(main_container, text="Preview", padding="10")
@@ -233,8 +270,16 @@ class DymoPrintGUI:
     
     def on_dither_change(self):
         """Called when dithering method changes (still auto-preview)"""
+        self.toggle_riemersma_controls()
         if self.current_image_path:
             self.update_preview()
+
+    def toggle_riemersma_controls(self):
+        """Show/hide Riemersma parameters based on selection"""
+        if self.dither_var.get() == 'riemersma':
+            self.riemersma_frame.grid()
+        else:
+            self.riemersma_frame.grid_remove()
     
     def update_preview(self):
         """Generate preview with current settings (threaded)"""
@@ -255,6 +300,8 @@ class DymoPrintGUI:
             brightness = self.brightness_var.get()
             contrast = self.contrast_var.get()
             dither = self.dither_var.get()
+            riemersma_history = self.history_depth_var.get()
+            riemersma_ratio = self.ratio_var.get()
             
             # Generate processed image
             processed = prepare_image(
@@ -262,7 +309,9 @@ class DymoPrintGUI:
                 spec,
                 brightness=brightness,
                 contrast=contrast,
-                dither_alg=dither
+                dither_alg=dither,
+                riemersma_history=riemersma_history,
+                riemersma_ratio=riemersma_ratio
             )
             
             # Put result in queue for main thread to display
@@ -362,6 +411,8 @@ class DymoPrintGUI:
             brightness = self.brightness_var.get()
             contrast = self.contrast_var.get()
             dither = self.dither_var.get()
+            riemersma_history = self.history_depth_var.get()
+            riemersma_ratio = self.ratio_var.get()
             
             # Disable print button during printing
             self.print_btn.config(state=tk.DISABLED, text="Printing...")
@@ -376,7 +427,9 @@ class DymoPrintGUI:
                         label_code=label_code,
                         brightness=brightness,
                         contrast=contrast,
-                        dither_alg=dither
+                        dither_alg=dither,
+                        riemersma_history=riemersma_history,
+                        riemersma_ratio=riemersma_ratio
                     )
                     self.root.after(0, lambda: self.print_complete(None))
                 except Exception as e:
