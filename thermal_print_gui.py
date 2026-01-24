@@ -314,6 +314,20 @@ class ThermalPrintGUI:
         elif filtered_labels:
             self.label_combo.current(0)
             
+        # Add default Dymo lpoptions if switching to a Dymo printer
+        if brand_filter == 'dymo':
+            current_opts = self.lp_options_var.get()
+            dymo_defaults = "DymoPrintDensity=Medium DymoPrintQuality=Graphics"
+            # Only set if empty or previously generic to avoid overwriting user changes?
+            # For simplicity, if it's currently empty, set it.
+            if not current_opts:
+                self.lp_options_var.set(dymo_defaults)
+        elif brand_filter == 'generic':
+            # Clear Dymo defaults if switching back to generic, but only if they match the defaults
+            current_opts = self.lp_options_var.get()
+            if current_opts == "DymoPrintDensity=Medium DymoPrintQuality=Graphics":
+                self.lp_options_var.set("")
+
         self.update_label_info()
     
     def update_label_info(self):

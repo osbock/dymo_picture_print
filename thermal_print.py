@@ -359,6 +359,16 @@ def print_raw(image_path, printer_name, label_code='4x6', brightness=1.2, contra
         temp_file
     ]
     
+    # Add default Dymo options if it's a Dymo printer and no custom options provide them
+    if "dymo" in printer_name.lower():
+        dymo_defaults = ["DymoPrintDensity=Medium", "DymoPrintQuality=Graphics"]
+        existing_opts = custom_options.split() if isinstance(custom_options, str) else (custom_options or [])
+        for default_opt in dymo_defaults:
+            key = default_opt.split('=')[0]
+            if not any(key in opt for opt in existing_opts):
+                cmd.insert(-1, "-o")
+                cmd.insert(-1, default_opt)
+    
     if custom_options:
         # custom_options can be a list or a string of space-separated options
         if isinstance(custom_options, str):
