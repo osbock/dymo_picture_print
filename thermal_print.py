@@ -151,40 +151,69 @@ def riemersma_dither(img, history_depth=16, ratio=0.1):
 # Dimensions are in pixels at 300 DPI.
 # width_points and height_points are for verification/reference (1/72 inch).
 LABEL_SPECS = {
+    '4x6': {
+        'name': 'Shipping (4" x 6")',
+        'id': 'w288h432',
+        'width_px': 1200,
+        'height_px': 1800,
+        'rotate': False,
+        'brand': 'generic'
+    },
+    '4x4': {
+        'name': 'Square (4" x 4")',
+        'id': 'w288h288',
+        'width_px': 1200,
+        'height_px': 1200,
+        'rotate': False,
+        'brand': 'generic'
+    },
+    '2x3': {
+        'name': 'Small Label (2" x 3")',
+        'id': 'w144h216',
+        'width_px': 600,
+        'height_px': 900,
+        'rotate': False,
+        'brand': 'generic'
+    },
     '30256': {
-        'name': 'Shipping (2-5/16" x 4")',
+        'name': 'Dymo Shipping (2-5/16" x 4")',
         'id': 'w167h288',
         'width_px': 694,  # ~2.31" * 300
         'height_px': 1200, # 4" * 300
-        'rotate': True     # Long edge is usually height
+        'rotate': True,     # Long edge is usually height
+        'brand': 'dymo'
     },
     '30334': {
-        'name': '2-1/4" x 1-1/4"',
+        'name': 'Dymo 2-1/4" x 1-1/4"',
         'id': 'w162h90', 
         'width_px': 675, # 2.25 * 300
         'height_px': 375, # 1.25 * 300
-        'rotate': False # Width > Height, might not need rotation depending on roll
+        'rotate': False, # Width > Height, might not need rotation depending on roll
+        'brand': 'dymo'
     },
     '30332': {
-        'name': '1" x 1"',
+        'name': 'Dymo 1" x 1"',
         'id': 'w72h72',
         'width_px': 300,
         'height_px': 300,
-        'rotate': False
+        'rotate': False,
+        'brand': 'dymo'
     },
     '30330': {
-        'name': 'Return Address (3/4" x 2")',
+        'name': 'Dymo Return Address (3/4" x 2")',
         'id': 'w54h144', # 0.75 * 72 = 54, 2 * 72 = 144
         'width_px': 225, # 0.75 * 300
         'height_px': 600, # 2 * 300
-        'rotate': True
+        'rotate': True,
+        'brand': 'dymo'
     },
     '30252': {
-        'name': 'Address (28mm x 89mm / 1.1" x 3.5")',
+        'name': 'Dymo Address (28mm x 89mm / 1.1" x 3.5")',
         'id': 'w79h252',
         'width_px': 331,  # 28mm = 1.102" * 300
         'height_px': 1051, # 89mm = 3.504" * 300
-        'rotate': True
+        'rotate': True,
+        'brand': 'dymo'
     }
 }
 
@@ -201,7 +230,7 @@ def list_printers():
 
 def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_alg='floyd', riemersma_history=16, riemersma_ratio=0.1):
     """
-    Prepare image for a specific Dymo label.
+    Prepare image for a specific label.
     """
     img = Image.open(image_path).convert('L')
 
@@ -216,17 +245,16 @@ def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_a
     img = enhancer.enhance(contrast) 
     
     # 2. Orientation
-    # Rotate if needed based on spec (usually for labels that print along the roll)
-    if label_spec['rotate']:
-        # Check if user image is already portrait/landscape matching the target? 
-        # For simple logic: assume input should be fit to the label's main axis.
-        # If the label is "tall" (like shipping), we typically rotate "wide" images to fit.
-        if img.height < img.width:
-             img = img.rotate(90, expand=True)
-    
-    # 3. Precise Resizing
+    # Automatically match the long side of the image to the long side of the label.
     target_w = label_spec['width_px']
     target_h = label_spec['height_px']
+    
+    img_is_landscape = img.width > img.height
+    label_is_landscape = target_w > target_h
+    
+    if img_is_landscape != label_is_landscape:
+        # Orientations don't match, rotate 90 degrees
+        img = img.rotate(90, expand=True)
     
     # Maintain aspect ratio?
     # Strategy: Fit within target dimensions, centering? Or fill?
@@ -310,14 +338,14 @@ def prepare_image(image_path, label_spec, brightness=1.2, contrast=1.0, dither_a
         # Fallback to simple threshold if unknown or 'none'
         return img.convert('1', dither=Image.NONE)
 
-def print_to_dymo_raw(image_path, printer_name, label_code='30256', brightness=1.2, contrast=1.0, dither_alg='floyd', riemersma_history=16, riemersma_ratio=0.1):
+def print_raw(image_path, printer_name, label_code='4x6', brightness=1.2, contrast=1.0, dither_alg='floyd', riemersma_history=16, riemersma_ratio=0.1, custom_options=None):
     if label_code not in LABEL_SPECS:
         print(f"Error: Unknown label code '{label_code}'. Available: {list(LABEL_SPECS.keys())}")
         return
 
     spec = LABEL_SPECS[label_code]
     final_image = prepare_image(image_path, spec, brightness, contrast, dither_alg, riemersma_history, riemersma_ratio)
-    temp_file = "dymo_final.png"
+    temp_file = "thermal_final.png"
     final_image.save(temp_file)
 
     # COMMAND CHANGES:
@@ -331,6 +359,19 @@ def print_to_dymo_raw(image_path, printer_name, label_code='30256', brightness=1
         temp_file
     ]
     
+    if custom_options:
+        # custom_options can be a list or a string of space-separated options
+        if isinstance(custom_options, str):
+            # Try to split by space but respect quotes? Simple split for now.
+            import shlex
+            extra_opts = shlex.split(custom_options)
+        else:
+            extra_opts = custom_options
+        
+        for opt in extra_opts:
+            cmd.insert(-1, "-o")
+            cmd.insert(-1, opt)
+    
     try:
         subprocess.run(cmd, check=True)
         print(f"Sent {image_path} to {printer_name} using media {spec['id']}")
@@ -341,15 +382,16 @@ def print_to_dymo_raw(image_path, printer_name, label_code='30256', brightness=1
 # Usage
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Print images to Dymo LabelWriter")
+    parser = argparse.ArgumentParser(description="Print images to Thermal Printers")
     parser.add_argument("image", nargs="?", help="Path to image file")
     parser.add_argument("--printer", help="Name of the printer to use")
     parser.add_argument("--brightness", type=float, default=1.2, help="Brightness factor (default: 1.2)")
     parser.add_argument("--contrast", type=float, default=1.0, help="Contrast factor (default: 1.0)")
     parser.add_argument("--dither", choices=['floyd', 'bayer', 'yliluoma', 'cluster', 'none', 'floyd-steinberg', 'atkinson', 'jarvis-judice-ninke', 'stucki', 'burkes', 'sierra3', 'sierra2', 'sierra-2-4a', 'ascii', 'riemersma'], default='floyd', help="Dithering algorithm (default: floyd)")
-    parser.add_argument("--label", default='30256', help="Dymo Label Code (default: 30256). Choices: " + ", ".join(LABEL_SPECS.keys()))
+    parser.add_argument("--label", default='4x6', help="Label Code (default: 4x6). Choices: " + ", ".join(LABEL_SPECS.keys()))
     parser.add_argument("--riemersma-history", type=int, default=16, help="Riemersma history depth (default: 16)")
     parser.add_argument("--riemersma-ratio", type=float, default=0.1, help="Riemersma error decay ratio (default: 0.1)")
+    parser.add_argument("--lp-options", help="Additional custom lp options (e.g., 'Darkness=10 PrintSpeed=40')")
     
     args = parser.parse_args()
 
@@ -363,13 +405,13 @@ if __name__ == "__main__":
             print("No printers found! Check your connections.")
             sys.exit(1)
 
-        # Simple logic to pick a printer
-        # If "Dymo" is in the name, pick it automatically, otherwise ask user or pick first.
-        dymo_printers = [p for p in available_printers if "dymo" in p.lower()]
+        # If "Dymo" or "RX106" or "Comer" is in the name, pick it automatically
+        target_keywords = ["dymo", "rx106", "comer"]
+        preferred_printers = [p for p in available_printers if any(kw in p.lower() for kw in target_keywords)]
         
-        if dymo_printers:
-            target_printer = dymo_printers[0]
-            print(f"Auto-selected Dymo printer: {target_printer}")
+        if preferred_printers:
+            target_printer = preferred_printers[0]
+            print(f"Auto-selected printer: {target_printer}")
         else:
             print("Available printers:", available_printers)
             target_printer = input("Enter exact printer name from above: ")
@@ -382,6 +424,11 @@ if __name__ == "__main__":
 
     # --- STEP 3: Print ---
     if os.path.exists(target_image):
-        print_to_dymo_raw(target_image, target_printer, args.label, args.brightness, args.contrast, args.dither, args.riemersma_history, args.riemersma_ratio)
+        print_raw(
+            target_image, target_printer, args.label, 
+            args.brightness, args.contrast, args.dither, 
+            args.riemersma_history, args.riemersma_ratio,
+            args.lp_options
+        )
     else:
         print("File not found.")

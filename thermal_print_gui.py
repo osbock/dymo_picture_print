@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GUI for Dymo Picture Print
+GUI for Thermal Picture Print
 Provides interactive controls for image adjustment and real-time preview
 """
 
@@ -11,20 +11,21 @@ import threading
 import queue
 import sys
 
-# Import core functions from dymo_print
-from dymo_print import LABEL_SPECS, list_printers, prepare_image, print_to_dymo_raw
+# Import core functions from thermal_print
+from thermal_print import LABEL_SPECS, list_printers, prepare_image, print_raw
 
 
-class DymoPrintGUI:
+class ThermalPrintGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Dymo Picture Print")
+        self.root.title("Thermal Picture Print")
         self.root.geometry("1000x700")
         
         # State variables
         self.current_image_path = None
         self.original_image = None
         self.preview_image = None
+        self.processed_image = None  # Store the latest fully processed PIL image
         self.preview_queue = queue.Queue()
         self.preview_thread = None
         
@@ -149,7 +150,7 @@ class DymoPrintGUI:
 
         # Label type dropdown
         ttk.Label(controls_frame, text="Label Type:").grid(row=8, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
-        self.label_var = tk.StringVar(value="30256")
+        self.label_var = tk.StringVar(value="4x6")
         label_options = [f"{code} - {spec['name']}" for code, spec in LABEL_SPECS.items()]
         self.label_combo = ttk.Combobox(
             controls_frame, 
@@ -180,11 +181,22 @@ class DymoPrintGUI:
             state='readonly',
             width=25
         )
-        self.printer_combo.grid(row=12, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.printer_combo.grid(row=12, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.printer_combo.bind('<<ComboboxSelected>>', self.update_label_list)
+        
+        # Custom lp options
+        ttk.Label(controls_frame, text="Custom Print Options (lpoptions):").grid(row=13, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
+        self.lp_options_var = tk.StringVar()
+        self.lp_options_entry = ttk.Entry(
+            controls_frame,
+            textvariable=self.lp_options_var,
+            width=25
+        )
+        self.lp_options_entry.grid(row=14, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         
         # Label info display
         self.info_frame = ttk.LabelFrame(controls_frame, text="Label Information", padding="5")
-        self.info_frame.grid(row=13, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
+        self.info_frame.grid(row=15, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
         self.info_label = ttk.Label(self.info_frame, text="", justify=tk.LEFT)
         self.info_label.pack()
         self.update_label_info()
@@ -192,11 +204,20 @@ class DymoPrintGUI:
         # Print button
         self.print_btn = ttk.Button(
             controls_frame, 
-            text="Print to Dymo", 
+            text="Print Image", 
             command=self.print_image,
             state=tk.DISABLED
         )
-        self.print_btn.grid(row=14, column=0, columnspan=2, sticky=(tk.W, tk.E))
+        self.print_btn.grid(row=16, column=0, columnspan=1, sticky=(tk.W, tk.E), padx=(0, 5))
+        
+        # Save button
+        self.save_btn = ttk.Button(
+            controls_frame,
+            text="Save Image",
+            command=self.save_image,
+            state=tk.DISABLED
+        )
+        self.save_btn.grid(row=16, column=1, columnspan=1, sticky=(tk.W, tk.E), padx=(5, 0))
         
         # Right panel - Preview
         preview_frame = ttk.LabelFrame(main_container, text="Preview", padding="10")
@@ -217,12 +238,17 @@ class DymoPrintGUI:
         printers = list_printers()
         if printers:
             self.printer_combo['values'] = printers
-            # Auto-select Dymo printer if available
-            dymo_printers = [p for p in printers if 'dymo' in p.lower()]
-            if dymo_printers:
-                self.printer_combo.set(dymo_printers[0])
+            # Auto-select preferred printer if available
+            target_keywords = ["dymo", "rx106", "comer"]
+            preferred_printers = [p for p in printers if any(kw in p.lower() for kw in target_keywords)]
+            
+            if preferred_printers:
+                self.printer_combo.set(preferred_printers[0])
             else:
                 self.printer_combo.current(0)
+            
+            # Update label list for selected printer
+            self.update_label_list()
         else:
             self.printer_combo['values'] = ["No printers found"]
             self.printer_combo.current(0)
@@ -246,6 +272,7 @@ class DymoPrintGUI:
                 import os
                 self.file_label.config(text=os.path.basename(file_path))
                 self.print_btn.config(state=tk.NORMAL)
+                self.save_btn.config(state=tk.NORMAL)
                 self.refresh_btn.config(state=tk.NORMAL)
                 
                 # Generate preview
@@ -257,6 +284,37 @@ class DymoPrintGUI:
         """Extract label code from combo box selection"""
         selection = self.label_var.get()
         return selection.split(' - ')[0]
+
+    def update_label_list(self, event=None):
+        """Update label combo box based on selected printer"""
+        printer = self.printer_var.get().lower()
+        
+        # Determine brand filter
+        brand_filter = 'dymo' if 'dymo' in printer else 'generic'
+        
+        # Filter labels
+        filtered_labels = [
+            f"{code} - {spec['name']}" 
+            for code, spec in LABEL_SPECS.items() 
+            if spec.get('brand') == brand_filter
+        ]
+        
+        # Update combo values
+        self.label_combo['values'] = filtered_labels
+        
+        # Select first or stay if still available
+        current = self.label_var.get()
+        # Find if current exists in new list (comparison by code/prefix)
+        # Check if the code part matches
+        current_code = current.split(' - ')[0]
+        match = next((l for l in filtered_labels if l.startswith(f"{current_code} - ")), None)
+        
+        if match:
+            self.label_combo.set(match)
+        elif filtered_labels:
+            self.label_combo.current(0)
+            
+        self.update_label_info()
     
     def update_label_info(self):
         """Update label information display"""
@@ -327,6 +385,7 @@ class DymoPrintGUI:
                 result_type, result_data = self.preview_queue.get_nowait()
                 
                 if result_type == 'success':
+                    self.processed_image = result_data
                     self.display_preview(result_data)
                 elif result_type == 'error':
                     self.status_label.config(text=f"Error: {result_data}")
@@ -421,7 +480,7 @@ class DymoPrintGUI:
             # Print in background thread to keep UI responsive
             def print_thread():
                 try:
-                    print_to_dymo_raw(
+                    print_raw(
                         self.current_image_path,
                         printer,
                         label_code=label_code,
@@ -429,7 +488,8 @@ class DymoPrintGUI:
                         contrast=contrast,
                         dither_alg=dither,
                         riemersma_history=riemersma_history,
-                        riemersma_ratio=riemersma_ratio
+                        riemersma_ratio=riemersma_ratio,
+                        custom_options=self.lp_options_var.get()
                     )
                     self.root.after(0, lambda: self.print_complete(None))
                 except Exception as e:
@@ -439,11 +499,11 @@ class DymoPrintGUI:
             
         except Exception as e:
             messagebox.showerror("Print Error", f"Failed to print:\n{str(e)}")
-            self.print_btn.config(state=tk.NORMAL, text="Print to Dymo")
+            self.print_btn.config(state=tk.NORMAL, text="Print Image")
     
     def print_complete(self, error):
         """Called when print job completes"""
-        self.print_btn.config(state=tk.NORMAL, text="Print to Dymo")
+        self.print_btn.config(state=tk.NORMAL, text="Print Image")
         
         if error:
             messagebox.showerror("Print Error", f"Failed to print:\n{error}")
@@ -452,10 +512,35 @@ class DymoPrintGUI:
             #messagebox.showinfo("Success", "Print job sent successfully!")
             self.status_label.config(text="Print job sent")
 
+    def save_image(self):
+        """Save the processed image to a file"""
+        if not self.processed_image or not self.current_image_path:
+            messagebox.showwarning("No Image", "Please open an image first")
+            return
+            
+        import os
+        # Pre-populate with original filename but .png extension
+        base_name = os.path.splitext(os.path.basename(self.current_image_path))[0]
+        initial_file = f"{base_name}.png"
+        
+        file_path = filedialog.asksaveasfilename(
+            title="Save Dithered Image",
+            defaultextension=".png",
+            initialfile=initial_file,
+            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            try:
+                self.processed_image.save(file_path)
+                self.status_label.config(text=f"Image saved to {os.path.basename(file_path)}")
+            except Exception as e:
+                messagebox.showerror("Save Error", f"Failed to save image:\n{str(e)}")
+
 
 def main():
     root = tk.Tk()
-    app = DymoPrintGUI(root)
+    app = ThermalPrintGUI(root)
     root.mainloop()
 
 

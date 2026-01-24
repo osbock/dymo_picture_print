@@ -1,22 +1,24 @@
-# Dymo Picture Print
+# Thermal Picture Print
 
-Python script to dither and print photos on a Dymo LabelWriter. Supports multiple label sizes, advanced dithering algorithms, and image enhancement options for optimal thermal printing results.
+Python tool to dither and print photos on thermal label printers. Supports Dymo LabelWriter, COMER RX1106HD, and other standard thermal printers. Includes advanced dithering algorithms and image enhancement options for optimal thermal printing results.
 
 ## Features
 
-- **Multiple Label Sizes**: Support for 6 common Dymo label types (30256, 30334, 30332, 30330, 30252)
-- **Advanced Dithering Algorithms**: 14+ dithering options including Floyd-Steinberg, Riemersma, Bayer, and more
-- **Image Enhancement**: Adjustable brightness and contrast for optimal thermal printing
-- **Interactive Fine-Tuning**: Adjust Riemersma parameters directly in the GUI or via CLI
-- **Auto-Printer Detection**: Automatically detects Dymo printers on macOS
-- **Smart Image Fitting**: Automatically fits images to label dimensions while maintaining aspect ratio
+- **Broad Printer Support**: Optimized for COMER RX1106HD and Dymo LabelWriter models.
+- **Custom Print Options**: Pass arbitrary `lpoptions` directly to fine-tune your printer (darkness, speed, etc.).
+- **Multiple Label Sizes**: Support for standard 4x6 shipping labels and many Dymo-specific sizes.
+- **Dynamic Label Filtering**: GUI automatically shows relevant labels based on the selected printer.
+- **Advanced Dithering**: 15+ dithering options including Floyd-Steinberg, Riemersma, Bayer, and Atkinson.
+- **Auto-Orientation**: Automatically aligns the long side of your photo to the long side of the label.
+- **Save Dithered Image**: Export your processed 1-bit monochrome images to PNG files.
+- **Interactive Fine-Tuning**: Real-time preview of all adjustments in the GUI.
 
 ## Installation
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/dymo_picture_print.git
-cd dymo_picture_print
+git clone https://github.com/yourusername/thermal_picture_print.git
+cd thermal_picture_print
 ```
 
 2. Create and activate a virtual environment (recommended):
@@ -41,39 +43,27 @@ brew install python-tk@3.13
 For an easier, more visual experience, use the GUI version:
 
 ```bash
-python dymo_print_gui.py
+python thermal_print_gui.py
 ```
 
 ### GUI Features
 
-- **Live Preview**: See how your image will look before printing with real-time updates
-- **Interactive Controls**: Adjust brightness and contrast with sliders
-- **Easy Selection**: Dropdown menus for dithering method, label type, and printer
-- **Advanced Controls**: Dynamic sliders for Riemersma dithering (History Depth and Ratio)
-- **Visual Feedback**: Display shows exact label dimensions and processing status
-
-### Using the GUI
-
-1. Click **"Open Image"** to select your photo
-2. Adjust settings as needed:
-   - Drag the **Brightness** slider (0.5-2.0)
-   - Drag the **Contrast** slider (0.5-2.0)
-   - Select a **Dithering Method** from the dropdown
-   - Choose your **Label Type**
-   - Select your **Printer**
-3. Watch the preview update automatically
-4. Click **"Print to Dymo"** when satisfied
+- **Live Preview**: See how your image will look before printing with real-time updates.
+- **Interactive Controls**: Adjust brightness and contrast with sliders.
+- **Save Image**: Export the dithered result directly to a PNG.
+- **Dynamic Selection**: Selecting your printer automatically filters the available label types.
+- **Custom Options**: Enter `lpoptions` strings (like `Darkness=10`) directly in the UI.
 
 ## Command-Line Usage
 
 ### Basic Usage
 ```bash
-python dymo_print.py image.jpg
+python thermal_print.py image.jpg
 ```
 
 ### Advanced Usage
 ```bash
-python dymo_print.py image.jpg --label 30256 --dither floyd-steinberg --brightness 1.3 --contrast 1.1 --printer "DYMO LabelWriter 450"
+python thermal_print.py image.jpg --label 4x6 --dither floyd-steinberg --lp-options "Darkness=10" --printer "_RX106HD"
 ```
 
 ### Command-Line Arguments
@@ -82,96 +72,33 @@ python dymo_print.py image.jpg --label 30256 --dither floyd-steinberg --brightne
 |----------|-------------|---------|
 | `image` | Path to image file | Required (or prompted) |
 | `--printer` | Name of printer to use | Auto-detected |
-| `--label` | Dymo label code (see below) | `30256` |
+| `--label` | Label code (e.g., `4x6`, `30256`) | `4x6` |
 | `--brightness` | Brightness factor (0.5-2.0 recommended) | `1.2` |
 | `--contrast` | Contrast factor (0.5-2.0 recommended) | `1.0` |
-| `--dither` | Dithering algorithm (see below) | `floyd` |
-| `--riemersma-history` | Riemersma history depth (2-32) | `16` |
+| `--dither` | Dithering algorithm | `floyd` |
+| `--lp-options` | Custom `lp` options (e.g., `Darkness=10`) | None |
+| `--riemersma-history`| Riemersma history depth (2-32) | `16` |
 | `--riemersma-ratio` | Riemersma error decay ratio (0.1-0.9) | `0.1` |
 
 ## Supported Label Types
 
-| Code | Name | Dimensions | Best For |
-|------|------|------------|----------|
-| `30256` | Shipping Label | 2-5/16" × 4" | Photos, artwork |
-| `30334` | Medium Rectangle | 2-1/4" × 1-1/4" | Small photos, stickers |
-| `30332` | Square | 1" × 1" | Tiny images, icons |
-| `30330` | Return Address | 3/4" × 2" | Narrow photos |
-| `30252` | Address Label | 28mm × 89mm | Standard photos |
-
-## Dithering Algorithms
-
-The script supports multiple dithering algorithms from the `hitherdither` library:
-
-### Ordered Dithering
-- `bayer` - Bayer matrix dithering (good for photos)
-- `yliluoma` - Yliluoma's 1 ordered dithering (high quality)
-- `cluster` - Cluster-dot dithering (newspaper-like)
-
-### Error Diffusion Dithering
-- `floyd` / `floyd-steinberg` - Floyd-Steinberg (default, great balance)
-- `atkinson` - Atkinson dithering (softer, Mac-like)
-- `jarvis-judice-ninke` - JJN dithering (detailed)
-- `stucki` - Stucki dithering (smooth)
-- `burkes` - Burkes dithering (fast)
-- `sierra3` - Sierra-3 dithering
-- `sierra2` - Sierra-2 dithering
-- `sierra-2-4a` - Sierra Lite dithering
-- `riemersma` - Hilbert curve error diffusion (high quality, reduced banding)
-
-### Other
-- `none` - Simple threshold (no dithering)
-
-## Examples
-
-### Print a shipping label with Atkinson dithering:
-```bash
-python dymo_print.py photo.jpg --label 30256 --dither atkinson
-```
-
-### Print a bright sticker with Bayer dithering:
-```bash
-python dymo_print.py logo.png --label 30334 --dither bayer --brightness 1.4
-```
-
-### Print with high contrast for better detail:
-```bash
-python dymo_print.py portrait.jpg --contrast 1.2 --dither floyd-steinberg
-```
-
-### Print with Riemersma dithering for smoothest gradients:
-```bash
-python dymo_print.py photo.jpg --dither riemersma --riemersma-history 16 --riemersma-ratio 0.1
-```
+| Code | Name | Best For |
+|------|------|----------|
+| `4x6` | Shipping Label (Generic/COMER) | Large photos, shipping |
+| `4x4` | Square Label (Generic) | Square artwork |
+| `30256` | Dymo Shipping | 450/550 Shipping |
+| `30334` | Dymo Medium Rectangle | Stickers |
+| `30332` | Dymo Square | Icons |
 
 ## Tips for Best Results
 
-1. **Brightness**: Thermal printers tend to print darker. Try `--brightness 1.2` to `1.5` for better results.
+1. **Brightness**: Thermal printers tend to print darker. Try `--brightness 1.2` to `1.5`.
 2. **Contrast**: Increase contrast (`--contrast 1.1` to `1.3`) to reduce gray noise and improve definition.
 3. **Dithering**: Experiment with different algorithms:
-   - Use `floyd-steinberg` or `atkinson` for photos
-   - Use `riemersma` for the highest quality gradients and reduced banding (recommended for 450/550 models)
-   - Use `bayer` for textured, artistic looks
-   - Use `yliluoma` for highest quality ordered dithering
-4. **Image Preparation**: Pre-crop images to match label aspect ratio for best composition.
-
-## Requirements
-
-- macOS with CUPS (for `lp` and `lpstat` commands)
-- Python 3.7+
-- Pillow (PIL)
-- hitherdither library
-- Dymo LabelWriter printer
-
-## Troubleshooting
-
-**Printer not detected**: Run `lpstat -e` to list available printers, then use `--printer` with the exact name.
-
-**Image too dark**: Increase `--brightness` to 1.3 or higher.
-
-**Grainy output**: Increase `--contrast` to 1.1 or 1.2 to eliminate gray tones.
-
-**Wrong label size**: Verify your label type and use the matching `--label` code.
+   - Use `floyd-steinberg` or `atkinson` for photos.
+   - Use `riemersma` for the highest quality gradients and reduced banding.
+   - Use `bayer` or `yliluoma` for crisp, textured looks.
+4. **Custom Options**: For COMER printers, try adding `Darkness=10` or `PrintSpeed=40` in the Custom Print Options field.
 
 ## License
 
