@@ -1,7 +1,7 @@
 # Thermal Picture Print
 
 Python tool to dither and print photos on thermal label printers. Supports Dymo LabelWriter, COMER RX1106HD, and other standard thermal printers. Includes advanced dithering algorithms and image enhancement options for optimal thermal printing results.
-
+![gui](/images/gui_example.png "thermal_print_gui.py")
 ## Features
 
 - **Broad Printer Support**: Optimized for COMER RX1106HD and Dymo LabelWriter models.
